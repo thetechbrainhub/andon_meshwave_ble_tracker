@@ -14,15 +14,14 @@ unsigned long lastJsonOutput = 0;
 // Display Manager Instance
 DisplayManager* displayManager = nullptr;
 
-// Tracking fÃ¼r Worker-Status
+// Tracking für Worker-Status
 static bool lastWorkerPresent = false;
 static bool workerGoneAlertActive = false;
 static unsigned long workerGoneAlertTime = 0;
-static constexpr unsigned long WORKER_GONE_ALERT_DURATION = 5000; // 5 Sekunden Alert anzeigen
+static constexpr unsigned long WORKER_GONE_ALERT_DURATION = 5000;
 
 void setup() {
   Serial.begin(115200);
-  // Warte kurz, aber nicht endlos auf die serielle Verbindung
   delay(1000);
   
   // Initialize Display Manager first
@@ -32,18 +31,25 @@ void setup() {
   // Initialize ConfigManager
   ConfigManager::init();
   
-  // Try to load saved configuration from NVS (silently fail if not found)
+  // Try to load saved configuration from NVS
   Serial.println("Checking for saved configuration...");
   ConfigManager::loadFromNVS();
   
-  // Initialize UART for Meshtastic communication
+  // ✅ WICHTIG: Initialize UART DIREKT hier in setup() - wie im funktionierenden Projekt
+  // Pin-Zuweisung: RX=GPIO44, TX=GPIO43 (aus Config.h)
+  Serial.println("Initializing UART1 for Meshtastic communication...");
+  Serial.printf("UART1 Config: RX=GPIO%d, TX=GPIO%d, Baudrate=%d\n", UART_RX_PIN, UART_TX_PIN, UART_BAUD_RATE);
+  MeshtasticSerial.begin(UART_BAUD_RATE, SERIAL_8N1, UART_RX_PIN, UART_TX_PIN);
+  Serial.println("MeshtasticSerial initialized (UART1 @ 115200 baud)");
+  
+  // Dann nur noch initMeshtasticComm() für weitere Setup-Ausgaben
   initMeshtasticComm();
   
   Serial.println("\n=====================================================");
   Serial.println("BLE Beacon Scanner mit dynamischer Konfiguration");
   Serial.println("=====================================================");
   Serial.printf("Gateway ID: %s\n", GATEWAY_ID.c_str());
-  Serial.println("JSON Command Format: {\"target\":\"" + String(GATEWAY_ID) + "\",\"parameter\":value}");
+  Serial.println("JSON Command Format: {\"target\":\"" + String(GATEWAY_ID.c_str()) + "\",\"parameter\":value}");
   Serial.printf("Distanz-Schwellenwert: %.1f Meter\n", ConfigManager::getDistanceThreshold());
   Serial.printf("TX Power: %d dBm @ 1m\n", ConfigManager::getTxPower());
   Serial.printf("Environmental Factor: %.1f (%.1f=Freiraum, >2.0=mit Hindernissen)\n", 
@@ -52,15 +58,12 @@ void setup() {
   Serial.printf("Gleitender Mittelwert: %d Werte\n", ConfigManager::getWindowSize());
   Serial.printf("JSON-Ausgabe-Intervall: %d ms\n", JSON_OUTPUT_INTERVAL);
   Serial.printf("Beacon Timeout: %d Sekunden\n", ConfigManager::getBeaconTimeout());
-  Serial.printf("UART fÃ¼r Meshtastic: TX=%d, RX=%d, Baudrate=%d\n", UART_TX_PIN, UART_RX_PIN, UART_BAUD_RATE);
+  Serial.printf("UART für Meshtastic: TX=%d, RX=%d, Baudrate=%d\n", UART_TX_PIN, UART_RX_PIN, UART_BAUD_RATE);
   Serial.println("Beacon-Verschwinden-Erkennung: Aktiv");
   Serial.println("Gateway Targeting System: Aktiv");
-  Serial.println("Dynamische Konfiguration Ã¼ber Meshtastic: Aktiv");
+  Serial.println("Dynamische Konfiguration über Meshtastic: Aktiv");
   Serial.println("Display-Integration: Aktiv");
-  Serial.println("Bereit zum Empfang von Konfigurationsbefehlen Ã¼ber Meshtastic UART...");
-  
-  // Initialize device filter (now managed by ConfigManager)
-  parseDeviceFilter();
+  Serial.println("Bereit zum Empfang von Konfigurationsbefehlen über Meshtastic UART...");
   
   Serial.println("=====================================================");
   
@@ -68,8 +71,7 @@ void setup() {
   bleScanner.init();
   
   Serial.println("BLE Scanner initialisiert.");
-  
-  Serial.println("Starte Scannen nach BLE-GerÃ¤ten in der Umgebung...");
+  Serial.println("Starte Scannen nach BLE-Geräten in der Umgebung...");
   
   // Initialize tracking variables
   initBeaconTracking();
@@ -108,7 +110,7 @@ void loop() {
   findAndTrackClosestBeacon();
   
   // Print brief summary to serial
-  Serial.print("GerÃ¤te gefunden: ");
+  Serial.print("Geräte gefunden: ");
   Serial.print(deviceCount);
   Serial.print(" (");
   Serial.print(devicesInRangeCount);
@@ -136,26 +138,70 @@ void loop() {
   
   // ============ DISPLAY UPDATE LOGIC ============
   if (displayManager) {
-    // PrÃ¼fe ob wir einen Beacon haben und dieser noch im Schwellenwert ist
-    bool beaconInRange = false;
+    // ✅ Count beacons in range
+    int beaconsInRange = 0;
+    std::string displayBeaconAddress = "";
     
-    if (!getCurrentClosestBeaconAddress().empty()) {
-      DeviceInfo& currentBeacon = deviceInfoMap[getCurrentClosestBeaconAddress()];
+    for (auto const& pair : deviceInfoMap) {
+      std::string address = pair.first;
+      DeviceInfo device = pair.second;
+      
+      if (!isDeviceInFilter(address)) continue;
+      
+      if (device.filteredDistance <= ConfigManager::getDistanceThreshold() && 
+          (millis() - device.lastSeen) < 30000) {
+        beaconsInRange++;
+      }
+    }
+    
+    // ✅ Update rotation if multiple beacons
+    if (beaconsInRange > 1) {
+      displayManager->updateBeaconRotation(beaconsInRange);
+    } else {
+      // Reset rotation index if only 1 or 0 beacons
+      if (beaconsInRange == 0) {
+        // Kein Beacon gefunden - Display aus
+        displayManager->turnDisplayOff();
+        workerGoneAlertActive = false;
+        lastWorkerPresent = false;
+      }
+    }
+    
+    // ✅ Get beacon to display (rotated if multiple)
+    int beaconIndex = 0;
+    displayBeaconAddress = "";
+    
+    for (auto const& pair : deviceInfoMap) {
+      std::string address = pair.first;
+      DeviceInfo device = pair.second;
+      
+      if (!isDeviceInFilter(address)) continue;
+      
+      if (device.filteredDistance <= ConfigManager::getDistanceThreshold() && 
+          (millis() - device.lastSeen) < 30000) {
+        
+        if (beaconIndex == displayManager->getCurrentBeaconIndex()) {
+          displayBeaconAddress = address;
+          break;
+        }
+        beaconIndex++;
+      }
+    }
+    
+    // Display the rotated beacon
+    if (!displayBeaconAddress.empty() && beaconsInRange > 0) {
+      DeviceInfo& currentBeacon = deviceInfoMap[displayBeaconAddress];
       float lastSeenTime = (millis() - currentBeacon.lastSeen);
       
-      // Beacon ist nur im Range wenn: Distanz <= Schwellenwert UND nicht zu alt
-      beaconInRange = (currentBeacon.filteredDistance <= ConfigManager::getDistanceThreshold() && 
-                       lastSeenTime < 30000);
+      bool beaconInRange = (currentBeacon.filteredDistance <= ConfigManager::getDistanceThreshold() && 
+                           lastSeenTime < 30000);
       
       if (beaconInRange) {
-        // Bestimme Worker-Status basierend auf last_seen Zeit
         bool workerIsPresent = (lastSeenTime < (ConfigManager::getBeaconTimeout() * 1000));
         
-        // PrÃ¼fe ob der Status sich geÃ¤ndert hat
         if (workerIsPresent != lastWorkerPresent) {
           lastWorkerPresent = workerIsPresent;
           
-          // Wenn Worker gerade verschwunden ist (ABSENT)
           if (!workerIsPresent && !workerGoneAlertActive) {
             workerGoneAlertActive = true;
             workerGoneAlertTime = millis();
@@ -164,40 +210,24 @@ void loop() {
           }
         }
         
-        // PrÃ¼fe ob Alert-Zeit vorbei ist
         if (workerGoneAlertActive) {
           unsigned long alertDuration = millis() - workerGoneAlertTime;
           if (alertDuration > WORKER_GONE_ALERT_DURATION) {
-            // Alert-Zeit vorbei, schalte Display aus
             workerGoneAlertActive = false;
             displayManager->turnDisplayOff();
             Serial.println("DISPLAY: Alert finished - display off");
           }
         } else if (workerIsPresent) {
-          // Normales Display-Update wenn Worker PRESENT ist
           displayManager->turnDisplayOn();
           displayManager->updateDisplay(
             GATEWAY_ID.c_str(),
             currentBeacon.name,
-            getCurrentClosestBeaconDistance(),
+            currentBeacon.filteredDistance,
             lastSeenTime,
             workerIsPresent
           );
         }
-      } else {
-        // Beacon ist nicht mehr im Range - Display aus, Flags zurÃ¼cksetzen
-        if (beaconInRange != (lastWorkerPresent || workerGoneAlertActive)) {
-          Serial.println("DISPLAY: Beacon out of range - turning off display");
-          displayManager->turnDisplayOff();
-          workerGoneAlertActive = false;
-          lastWorkerPresent = false;
-        }
       }
-    } else {
-      // Kein Beacon gefunden - Display aus
-      displayManager->turnDisplayOff();
-      workerGoneAlertActive = false;
-      lastWorkerPresent = false;
     }
   }
   // ============ END DISPLAY UPDATE ============

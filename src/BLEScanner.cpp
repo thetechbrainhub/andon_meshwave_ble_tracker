@@ -1,5 +1,6 @@
 #include "BLEScanner.h"
 #include "Config.h"
+#include "ConfigManager.h"
 #include "BeaconTracker.h"
 
 // Global instance
@@ -68,7 +69,7 @@ void MyAdvertisedDeviceCallbacks::onResult(NimBLEAdvertisedDevice* advertisedDev
   }
   
   // Check if this device is now closer than our current closest
-  if (deviceInfo.filteredDistance <= DISTANCE_THRESHOLD) {
+  if (deviceInfo.filteredDistance <= ConfigManager::getDistanceThreshold()) {
     // Compare with current closest
     if (deviceInfo.filteredDistance < getCurrentClosestBeaconDistance() && 
         deviceAddress != getCurrentClosestBeaconAddress()) {
@@ -124,7 +125,7 @@ float rssiToMeters(int rssi) {
 
 bool isDeviceInFilter(const std::string& address) {
   // If filter is not active, accept all devices
-  if (!USE_DEVICE_FILTER) {
+  if (!ConfigManager::getUseDeviceFilter()) {
     return true;
   }
   
@@ -132,8 +133,10 @@ bool isDeviceInFilter(const std::string& address) {
   return filteredDevices.find(address) != filteredDevices.end();
 }
 
+// ✅ FINAL FIX: parseDeviceFilter liest aus ConfigManager, nicht aus Config.h!
 void parseDeviceFilter() {
-  if (!USE_DEVICE_FILTER || DEVICE_FILTER.length() == 0) {
+  // ✅ WICHTIG: Nutze ConfigManager, nicht USE_DEVICE_FILTER aus Config.h
+  if (!ConfigManager::getUseDeviceFilter() || ConfigManager::getDeviceFilter().length() == 0) {
     Serial.println("Device filter is disabled. All devices will be monitored.");
     return;
   }
@@ -141,8 +144,8 @@ void parseDeviceFilter() {
   // Clear previous filter
   filteredDevices.clear();
   
-  // Parse the filter string
-  String filterStr = DEVICE_FILTER;
+  // ✅ WICHTIG: Lese filterStr aus ConfigManager, nicht aus Config.h!
+  String filterStr = ConfigManager::getDeviceFilter();
   int idx = 0;
   int lastIdx = 0;
   

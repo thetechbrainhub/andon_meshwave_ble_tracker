@@ -29,7 +29,8 @@ static constexpr int WINDOW_SIZE = 5;              // Anzahl der Werte für den 
 static constexpr int BEACON_TIMEOUT_SECONDS = 10;  // Timeout in Sekunden für Beacon-Tracking
 
 // Gateway Identification
-static const String GATEWAY_ID = "TRAC 001";         // Unique identifier for this gateway - change for multiple gateways
+// ✅ NOW EXTERN: Can be changed at runtime via config command
+extern std::string GATEWAY_ID;
 
 // Gerätefilter - Liste der MAC-Adressen, die überwacht werden sollen
 // Leere String = Alle Geräte überwachen, ansonsten komma-getrennte Liste, z.B. "e0:80:8f:1e:13:28,e4:b3:23:c1:f6:2a"

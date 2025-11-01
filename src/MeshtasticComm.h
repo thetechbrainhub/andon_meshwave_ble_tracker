@@ -2,17 +2,44 @@
 #define MESHTASTICCOMM_H
 
 #include <Arduino.h>
-#include <HardwareSerial.h>
 #include <string>
 #include "DeviceInfo.h"
 
-// Initialisiere die UART-Kommunikation für Meshtastic
+// Global serial interface
+extern HardwareSerial MeshtasticSerial;
+
+// ✅ Message buffer (character-based)
+extern std::string receivedChars;
+extern unsigned long lastCharTime;
+
+/**
+ * Initialize Meshtastic UART communication
+ * ✅ WICHTIG: .begin() wird NICHT hier aufgerufen!
+ * Das passiert jetzt in main.cpp setup()
+ * Call this in setup() NACH MeshtasticSerial.begin()
+ */
 void initMeshtasticComm();
 
-// Sende Beacon-Daten an Meshtastic
-void sendBeaconToMeshtastic(const std::string& address, DeviceInfo& device, float lastSeenOverride = -1);
+/**
+ * Send beacon data to Meshtastic
+ * @param address MAC address of beacon
+ * @param device Device info
+ * @param lastSeenOverride Override for last seen time
+ */
+void sendBeaconToMeshtastic(const std::string& address, DeviceInfo& device, float lastSeenOverride);
 
-// Prüfe auf eingehende Konfigurationsbefehle von Meshtastic
+/**
+ * Check for incoming Meshtastic commands
+ * Character-based buffering with timeout processing
+ * Call this every loop iteration
+ */
 void checkForMeshtasticCommands();
+
+/**
+ * Process complete JSON message from buffer
+ * Detects config commands and calls ConfigManager
+ * Called internally by checkForMeshtasticCommands()
+ */
+void processReceivedJSON();
 
 #endif // MESHTASTICCOMM_H

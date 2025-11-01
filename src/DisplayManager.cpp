@@ -1,8 +1,9 @@
 #include "DisplayManager.h"
+#include "Config.h"
 
 // Constructor
 DisplayManager::DisplayManager(int sdaPin, int sclPin) 
-  : isDisplayActive(true), lastUpdateTime(0) {
+  : isDisplayActive(true), lastUpdateTime(0), currentBeaconIndex(0), lastRotationTime(0) {
   display = new U8G2_SH1106_128X64_NONAME_F_SW_I2C(U8G2_R0, sclPin, sdaPin, U8X8_PIN_NONE);
 }
 
@@ -79,7 +80,8 @@ String DisplayManager::formatLastSeen(unsigned long lastSeenMs) {
 void DisplayManager::drawHeader() {
   // Top header bar - Gateway ID (smaller font)
   display->setFont(u8g2_font_t0_12_tr);
-  display->drawStr(2, 10, "GATEWAY: BLE001");
+  String headerText = "GATEWAY: " + String(GATEWAY_ID.c_str());
+  display->drawStr(2, 10, headerText.c_str());
   display->drawLine(0, 12, 128, 12);
 }
 
@@ -93,14 +95,6 @@ void DisplayManager::drawBeaconInfo(const std::string& gatewayId, const std::str
     displayName = displayName.substring(0, 12);
   }
   display->drawStr(2, 28, displayName.c_str());
-  
-  // ===== STATUS INDICATOR (Right-aligned) =====
-  // "PRESENT" or "ABSENT" - right aligned
-  display->setFont(u8g2_font_t0_11_tr);
-  String statusText = workerPresent ? "PRESENT" : "ABSENT";
-  int statusWidth = display->getStrWidth(statusText.c_str());
-  int statusX = 128 - statusWidth - 2; // Right aligned with 2px margin
-  display->drawStr(statusX, 28, statusText.c_str());
   
   // ===== SEPARATOR LINE =====
   display->drawLine(0, 30, 128, 30);
@@ -134,13 +128,30 @@ void DisplayManager::drawWorkerGone() {
   display->drawStr(40, 62, "Alert!");
 }
 
+// ✅ NEW: Update beacon rotation index
+void DisplayManager::updateBeaconRotation(int totalBeacons) {
+  unsigned long currentTime = millis();
+  
+  // Nur wenn mehrere Beacons vorhanden sind, rotieren
+  if (totalBeacons > 1 && (currentTime - lastRotationTime >= 2000)) {
+    currentBeaconIndex = (currentBeaconIndex + 1) % totalBeacons;
+    lastRotationTime = currentTime;
+    Serial.printf("DisplayManager: Rotating to beacon %d of %d\n", currentBeaconIndex + 1, totalBeacons);
+  }
+}
+
+// ✅ NEW: Get current beacon index
+int DisplayManager::getCurrentBeaconIndex() {
+  return currentBeaconIndex;
+}
+
 void DisplayManager::updateDisplay(const std::string& gatewayId, const std::string& beaconName,
                                    float distance, unsigned long lastSeenMs, bool workerPresent,
                                    bool workerActive) {
   
   if (!display) return;
   
-  // PrÃ¼fe ob Update nÃ¶tig ist
+  // Prüfe ob Update nötig ist
   unsigned long currentTime = millis();
   if (currentTime - lastUpdateTime < UPDATE_INTERVAL) {
     return;

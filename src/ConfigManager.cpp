@@ -17,9 +17,16 @@ float ConfigManager::runtime_PROCESS_NOISE = PROCESS_NOISE;
 float ConfigManager::runtime_MEASUREMENT_NOISE = MEASUREMENT_NOISE;
 int ConfigManager::runtime_WINDOW_SIZE = WINDOW_SIZE;
 int ConfigManager::runtime_BEACON_TIMEOUT_SECONDS = BEACON_TIMEOUT_SECONDS;
+
+// ✅ NEW: Initialize GATEWAY_ID
+std::string ConfigManager::runtime_GATEWAY_ID = "TRAC 001";
+
 std::set<std::string> ConfigManager::runtime_mac_addresses;
 bool ConfigManager::runtime_USE_DEVICE_FILTER = USE_DEVICE_FILTER;
 String ConfigManager::runtime_DEVICE_FILTER = DEVICE_FILTER;
+
+// ✅ NEW: Global GATEWAY_ID variable (defined in Config.h as extern)
+std::string GATEWAY_ID = "TRAC 001";
 
 void ConfigManager::init() {
     // Initialize MAC addresses from default filter
@@ -30,6 +37,12 @@ void ConfigManager::init() {
     for (const auto& mac : filteredDevices) {
         runtime_mac_addresses.insert(mac);
     }
+    
+    // Load saved configuration from NVS (including GATEWAY_ID)
+    loadFromNVS();
+    
+    // Update global GATEWAY_ID
+    GATEWAY_ID = runtime_GATEWAY_ID;
     
     Serial.println("ConfigManager initialized with default values");
     Serial.printf("Gateway ID: %s\n", GATEWAY_ID.c_str());
@@ -53,13 +66,27 @@ bool ConfigManager::processConfigCommand(const String& jsonString) {
     }
     
     String targetGateway = doc["target"].as<String>();
-    if (targetGateway != GATEWAY_ID) {
+    if (targetGateway != GATEWAY_ID.c_str()) {
         Serial.printf("ERROR: Command target '%s' does not match this gateway '%s'\n", 
                      targetGateway.c_str(), GATEWAY_ID.c_str());
         return false;
     }
     
     bool configChanged = false;
+    
+    // ✅ NEW: Handle gateway_id and set_gateway_id commands
+    if (doc.containsKey("CMD") && doc["CMD"].as<String>() == "set_gateway_id") {
+        if (doc.containsKey("value")) {
+            String newGatewayId = doc["value"].as<String>();
+            runtime_GATEWAY_ID = newGatewayId.c_str();
+            GATEWAY_ID = newGatewayId.c_str();
+            Serial.printf("Gateway ID changed to: %s\n", GATEWAY_ID.c_str());
+            configChanged = true;
+        } else {
+            Serial.println("ERROR: set_gateway_id requires 'value' field");
+            return false;
+        }
+    }
     
     // Process BLE Scan Parameters
     if (doc.containsKey("scan_time")) {
@@ -171,15 +198,6 @@ bool ConfigManager::processConfigCommand(const String& jsonString) {
         configChanged = true;
     }
     
-    // Process Gateway ID Changes
-    if (doc.containsKey("gateway_id")) {
-        String newGatewayId = doc["gateway_id"].as<String>();
-        // This would require updating the Config.h GATEWAY_ID at runtime
-        // For now, just acknowledge the command but note it requires restart
-        Serial.printf("Gateway ID change requested to: %s (requires restart to take effect)\n", newGatewayId.c_str());
-        configChanged = true;
-    }
-    
     // Update BLE scanner settings if scan parameters changed
     if (configChanged) {
         updateBLEScannerSettings();
@@ -246,6 +264,9 @@ void ConfigManager::saveToNVS() {
         return;
     }
     
+    // ✅ NEW: Save GATEWAY_ID
+    prefs.putString("gateway_id", runtime_GATEWAY_ID.c_str());
+    
     prefs.putInt("scan_time", runtime_SCAN_TIME);
     prefs.putInt("scan_interval", runtime_SCAN_INTERVAL);
     prefs.putInt("scan_window", runtime_SCAN_WINDOW);
@@ -277,6 +298,10 @@ void ConfigManager::loadFromNVS() {
     }
     
     Serial.println("Loading saved configuration from NVS...");
+    
+    // ✅ NEW: Load GATEWAY_ID
+    runtime_GATEWAY_ID = prefs.getString("gateway_id", "TRAC 001").c_str();
+    GATEWAY_ID = runtime_GATEWAY_ID;
     
     runtime_SCAN_TIME = prefs.getInt("scan_time", SCAN_TIME);
     runtime_SCAN_INTERVAL = prefs.getInt("scan_interval", SCAN_INTERVAL);

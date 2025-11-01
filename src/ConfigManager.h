@@ -23,6 +23,9 @@ private:
     static int runtime_WINDOW_SIZE;
     static int runtime_BEACON_TIMEOUT_SECONDS;
     
+    // ✅ NEW: Runtime GATEWAY_ID
+    static std::string runtime_GATEWAY_ID;
+    
     // MAC address management
     static std::set<std::string> runtime_mac_addresses;
     static bool runtime_USE_DEVICE_FILTER;
@@ -54,6 +57,9 @@ public:
     static int getBeaconTimeout() { return runtime_BEACON_TIMEOUT_SECONDS; }
     static bool getUseDeviceFilter() { return runtime_USE_DEVICE_FILTER; }
     static const String& getDeviceFilter() { return runtime_DEVICE_FILTER; }
+    
+    // ✅ NEW: Getter for runtime GATEWAY_ID
+    static const std::string& getGatewayID() { return runtime_GATEWAY_ID; }
     
     // Print current configuration
     static void printCurrentConfig();

@@ -11,7 +11,7 @@ String generateBeaconJSON(const std::string& address, DeviceInfo& device, float 
   
   if (lastSeenOverride >= 0) {
     lastSeenValue = lastSeenOverride;
-    // Wenn lastSeenOverride > BEACON_TIMEOUT_SECONDS, setzen wir crusher auf false
+    // Wenn lastSeenOverride > BEACON_TIMEOUT_SECONDS, setzen wir beacon auf false
     if (lastSeenOverride > BEACON_TIMEOUT_SECONDS) {
       forceCrusherAbsent = true;
     }
@@ -19,9 +19,9 @@ String generateBeaconJSON(const std::string& address, DeviceInfo& device, float 
     lastSeenValue = (millis() - device.lastSeen) / 1000.0;
   }
   
-  // Bestimme crusher basierend auf last_seen im Vergleich zum Schwellenwert
+  // Bestimme beacon basierend auf last_seen im Vergleich zum Schwellenwert
   // Aber überschreibe mit forceCrusherAbsent, wenn gesetzt
-  bool isCrusherPresent = forceCrusherAbsent ? false : (lastSeenValue < BEACON_TIMEOUT_SECONDS);
+  bool isBeaconPresent = forceCrusherAbsent ? false : (lastSeenValue < BEACON_TIMEOUT_SECONDS);
   
   // Debug-Ausgabe zur JSON-Generierung
   Serial.println("UART-DEBUG: JSON-Generierung für Beacon: " + String(address.c_str()));
@@ -29,15 +29,15 @@ String generateBeaconJSON(const std::string& address, DeviceInfo& device, float 
   Serial.print(lastSeenValue);
   Serial.print(", forceCrusherAbsent = ");
   Serial.print(forceCrusherAbsent ? "true" : "false");
-  Serial.print(", crusher = ");
-  Serial.println(isCrusherPresent ? "true" : "false");
+  Serial.print(", beacon = ");
+  Serial.println(isBeaconPresent ? "true" : "false");
   
   // Generiere JSON
   String json = "{";
   json += "\"name\":\"" + String(device.name.c_str()) + "\",";
   json += "\"distance\":" + String(device.filteredDistance, 2) + ",";
   json += "\"last_seen\":" + String(lastSeenValue, 1) + ",";
-  json += "\"crusher\":" + String(isCrusherPresent ? "true" : "false");
+  json += "\"beacon\":" + String(isBeaconPresent ? "true" : "false");
   json += "}";
   
   return json;

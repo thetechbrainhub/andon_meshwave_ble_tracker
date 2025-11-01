@@ -17,6 +17,12 @@ public:
   KalmanFilter(float initialValue = 0, float processNoise = PROCESS_NOISE, float measurementNoise = MEASUREMENT_NOISE);
   float update(float measurement);
   float getValue();
+  
+  // ✅ NEU: Dynamisches Update der Filter-Parameter
+  void updateNoise(float newProcessNoise, float newMeasurementNoise) {
+    Q = newProcessNoise;
+    R = newMeasurementNoise;
+  }
 };
 
 // Moving Average Filter implementation
