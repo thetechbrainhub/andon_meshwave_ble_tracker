@@ -145,6 +145,13 @@ int DisplayManager::getCurrentBeaconIndex() {
   return currentBeaconIndex;
 }
 
+// ✅ NEW: Reset beacon index when beacon leaves zone
+void DisplayManager::resetBeaconIndex() {
+  currentBeaconIndex = 0;
+  lastRotationTime = millis();
+  Serial.println("DISPLAY: Reset beacon rotation index");
+}
+
 void DisplayManager::updateDisplay(const std::string& gatewayId, const std::string& beaconName,
                                    float distance, unsigned long lastSeenMs, bool workerPresent,
                                    bool workerActive) {

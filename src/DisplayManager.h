@@ -44,6 +44,7 @@ public:
   // ✅ NEW: Beacon rotation methods
   void updateBeaconRotation(int totalBeacons);
   int getCurrentBeaconIndex();
+  void resetBeaconIndex();  // ✅ Reset rotation when beacon leaves zone
 };
 
 #endif // DISPLAYMANAGER_H

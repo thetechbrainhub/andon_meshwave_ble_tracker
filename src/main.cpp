@@ -19,6 +19,7 @@ static bool lastWorkerPresent = false;
 static bool workerGoneAlertActive = false;
 static unsigned long workerGoneAlertTime = 0;
 static constexpr unsigned long WORKER_GONE_ALERT_DURATION = 5000;
+static int lastBeaconsInRange = 0;  // ✅ Track beacon count changes
 
 void setup() {
   Serial.begin(115200);
@@ -27,6 +28,9 @@ void setup() {
   // Initialize Display Manager first
   displayManager = new DisplayManager(5, 6); // SDA=5, SCL=6
   displayManager->init();
+  
+  // ✅ Pass DisplayManager to BeaconTracker
+  setDisplayManager(displayManager);
   
   // Initialize ConfigManager
   ConfigManager::init();
@@ -154,20 +158,25 @@ void loop() {
       }
     }
     
-    // ✅ Update rotation if multiple beacons
-    if (beaconsInRange > 1) {
-      displayManager->updateBeaconRotation(beaconsInRange);
-    } else {
-      // Reset rotation index if only 1 or 0 beacons
-      if (beaconsInRange == 0) {
-        // Kein Beacon gefunden - Display aus
-        displayManager->turnDisplayOff();
-        workerGoneAlertActive = false;
-        lastWorkerPresent = false;
+    // ✅ Update rotation if beacons present (even if just 1)
+    if (beaconsInRange >= 1) {
+      // ✅ If beacon count decreased, reset display index to show next beacon
+      if (beaconsInRange < lastBeaconsInRange) {
+        displayManager->resetBeaconIndex();
+        Serial.println("DISPLAY: Beacon count decreased - resetting index");
       }
+      lastBeaconsInRange = beaconsInRange;
+      
+      displayManager->updateBeaconRotation(beaconsInRange);
+    } else if (beaconsInRange == 0) {
+      // Kein Beacon gefunden - Display aus
+      displayManager->turnDisplayOff();
+      workerGoneAlertActive = false;
+      lastWorkerPresent = false;
+      lastBeaconsInRange = 0;
     }
     
-    // ✅ Get beacon to display (rotated if multiple)
+    // ✅ Get beacon to display (rotated if multiple) - ONLY from beacons in zone
     int beaconIndex = 0;
     displayBeaconAddress = "";
     

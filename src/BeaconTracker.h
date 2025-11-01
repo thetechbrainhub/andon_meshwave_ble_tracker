@@ -27,4 +27,7 @@ unsigned long getLastBeaconUpdate();
 // Initialize beacon tracking
 void initBeaconTracking();
 
+// ✅ NEW: Set DisplayManager reference for UI updates
+void setDisplayManager(class DisplayManager* dm);
+
 #endif // BEACONTRACKER_H
