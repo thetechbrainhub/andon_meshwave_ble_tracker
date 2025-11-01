@@ -337,15 +337,29 @@ When a beacon enters the zone, an immediate update is sent showing all current b
 
 ### Zone Update JSON Format
 
+The system sends individual zone events as devices enter or leave the monitored zone. Each event is a separate JSON object transmitted immediately when the event occurs.
+
+**When a device ENTERS the zone (present:true):**
 ```json
-{"zone":"TRAC 001","s":[{"n":"NGIS 004","d":0.41},{"n":"WHOOP 4C0762464","d":0.68}]}
+{"zone":"TRAC 001","n":"NGIS 004","d":0.41,"present":true}
 ```
 
-The `zone` field identifies which gateway sent the update. The `s` array contains all beacons currently in the zone, with `n` being the beacon name and `d` being the distance in meters. When a beacon leaves, it simply doesn't appear in the next update.
+**When a device LEAVES the zone (present:false):**
+```json
+{"zone":"TRAC 001","n":"NGIS 004","present":false}
+```
+
+The `zone` field identifies which gateway sent the update. The `n` field is the device name, `d` is the distance in meters (only included for entering devices), and `present` indicates the device status. When a device leaves, the distance field is omitted since the device is no longer in range.
 
 ### Compact Payload Design
 
-Each beacon entry consumes approximately 25-35 bytes depending on name length. The system can fit 5-6 beacons per message, staying well under the 200-byte limit. Names are truncated to fit within payload constraints while remaining identifiable.
+Each zone event is approximately 50-80 bytes depending on device name length, staying well under the 200-byte Meshtastic limit. Multiple events may be batched in a single transmission, separated by line breaks (`\r\n`). Monitoring systems should parse each line as a separate JSON object.
+
+**Example batch transmission:**
+```json
+{"zone":"TRAC 001","n":"NGIS 004","d":0.41,"present":true}
+{"zone":"TRAC 001","n":"WHOOP 4C0762464","d":0.68,"present":true}
+```
 
 ---
 

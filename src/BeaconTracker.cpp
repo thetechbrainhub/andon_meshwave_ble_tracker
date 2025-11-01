@@ -75,7 +75,7 @@ void initBeaconTracking() {
   lastBeaconUpdate = 0;
 }
 
-// ✅ NEW: Check if zone composition changed
+// ✅ Check if zone composition changed
 bool hasZoneCompositionChanged() {
   // Compare current zone with previous zone
   if (currentScanBeacons.size() != previousZoneBeacons.size()) {
@@ -99,41 +99,60 @@ bool hasZoneCompositionChanged() {
   return false;  // No change
 }
 
-// ✅ NEW: Send zone update only on change
+// ✅ Send zone update - beacons entering the zone with present:true
 void sendZoneUpdate() {
   if (!hasZoneCompositionChanged()) {
     return;  // No change, don't send
   }
   
   zoneStateChanged = true;
-  previousZoneBeacons = currentScanBeacons;
   
-  Serial.println("UART-DEBUG: Zone composition changed - sending update");
-  Serial.printf("UART-DEBUG: Zone now has %d beacons\n", currentScanBeacons.size());
-  
-  // Send compact JSON with all beacons in zone
-  String json = "{\"zone\":\"" + String(GATEWAY_ID.c_str()) + "\",\"s\":[";
-  
-  bool first = true;
-  for (const auto& address : currentScanBeacons) {
-    if (deviceInfoMap.find(address) != deviceInfoMap.end()) {
-      DeviceInfo& device = deviceInfoMap[address];
-      
-      if (!first) json += ",";
-      first = false;
-      
-      json += "{\"n\":\"" + String(device.name.c_str()) + "\",\"d\":" + String(device.filteredDistance, 2) + "}";
+  // Find newly entered beacons (in current but not in previous)
+  std::set<std::string> newBeacons;
+  for (const auto& beacon : currentScanBeacons) {
+    if (previousZoneBeacons.find(beacon) == previousZoneBeacons.end()) {
+      newBeacons.insert(beacon);  // This beacon just entered
     }
   }
   
-  json += "]}";
+  // Find departed beacons (in previous but not in current)
+  std::set<std::string> departedBeacons;
+  for (const auto& beacon : previousZoneBeacons) {
+    if (currentScanBeacons.find(beacon) == currentScanBeacons.end()) {
+      departedBeacons.insert(beacon);  // This beacon just left
+    }
+  }
   
-  Serial.println("UART-DEBUG: Sending zone update:");
-  Serial.println(json);
-  Serial.printf("JSON size: %d bytes\n", json.length());
+  // Send events for newly entered beacons (present:true)
+  for (const auto& address : newBeacons) {
+    if (deviceInfoMap.find(address) != deviceInfoMap.end()) {
+      DeviceInfo& device = deviceInfoMap[address];
+      String json = "{\"zone\":\"" + String(GATEWAY_ID.c_str()) + "\",\"n\":\"" + String(device.name.c_str()) + "\",\"d\":" + String(device.filteredDistance, 2) + ",\"present\":true}";
+      
+      Serial.println("UART-DEBUG: Device ENTERED zone - sending presence notification:");
+      Serial.println(json);
+      Serial.printf("JSON size: %d bytes\n", json.length());
+      
+      MeshtasticSerial.println(json);
+    }
+  }
   
-  // Send via UART
-  MeshtasticSerial.println(json);
+  // Send events for departed beacons (present:false)
+  for (const auto& address : departedBeacons) {
+    if (deviceInfoMap.find(address) != deviceInfoMap.end()) {
+      DeviceInfo& device = deviceInfoMap[address];
+      String json = "{\"zone\":\"" + String(GATEWAY_ID.c_str()) + "\",\"n\":\"" + String(device.name.c_str()) + "\",\"present\":false}";
+      
+      Serial.println("UART-DEBUG: Device LEFT zone - sending absence notification:");
+      Serial.println(json);
+      Serial.printf("JSON size: %d bytes\n", json.length());
+      
+      MeshtasticSerial.println(json);
+    }
+  }
+  
+  // Update previous state
+  previousZoneBeacons = currentScanBeacons;
 }
 
 // Find the closest beacon and handle tracking
@@ -168,7 +187,7 @@ void findAndTrackClosestBeacon() {
     }
   }
   
-  // ✅ NEW: Check if zone composition changed and send update
+  // ✅ Check if zone composition changed and send updates
   sendZoneUpdate();
   
   if (!currentClosestBeaconAddress.empty()) {
@@ -182,7 +201,7 @@ void findAndTrackClosestBeacon() {
     
     if (!beaconIsVisible && !beaconDisappearanceReported) {
       Serial.println("UART-DEBUG: *** BEACON IST VERSCHWUNDEN! ***");
-      Serial.println("UART-DEBUG: Sende finale Benachrichtigung mit presence: false");
+      Serial.println("UART-DEBUG: Sende finale Benachrichtigung mit present: false");
       
       if (deviceInfoMap.find(currentClosestBeaconAddress) != deviceInfoMap.end()) {
         DeviceInfo& currentBeacon = deviceInfoMap[currentClosestBeaconAddress];
@@ -198,7 +217,7 @@ void findAndTrackClosestBeacon() {
     }
     
     if (beaconIsVisible && beaconDisappearanceReported) {
-      Serial.println("UART-DEBUG: BEACON IST ZURÜCKGEKEHRT! Sende neue Nachricht mit presence: true");
+      Serial.println("UART-DEBUG: BEACON IST ZURÜCKGEKEHRT! Sende neue Nachricht mit present: true");
       
       beaconStatusChanged = true;
       beaconDisappearanceReported = false;
@@ -249,7 +268,7 @@ void findAndTrackClosestBeacon() {
       if (deviceInfoMap.find(currentClosestBeaconAddress) != deviceInfoMap.end()) {
         DeviceInfo& lastTrackedBeacon = deviceInfoMap[currentClosestBeaconAddress];
         
-        Serial.println("UART-DEBUG: Sende finale Benachrichtigung für letzten Beacon mit presence: false");
+        Serial.println("UART-DEBUG: Sende finale Benachrichtigung für letzten Beacon mit present: false");
         sendBeaconToMeshtastic(currentClosestBeaconAddress, lastTrackedBeacon, BEACON_TIMEOUT_SECONDS + 1);
         
         beaconDisappearanceReported = true;
