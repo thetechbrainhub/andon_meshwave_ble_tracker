@@ -3,30 +3,25 @@
 
 #include <Arduino.h>
 #include <string>
-#include "DeviceInfo.h"
 
-// Global serial interface
-extern HardwareSerial MeshtasticSerial;
+// Global serial interface for Meshtastic UART1
+extern HardwareSerial* MeshtasticSerial;
 
-// ✅ Message buffer (character-based)
+// Message buffer
 extern std::string receivedChars;
 extern unsigned long lastCharTime;
 
 /**
  * Initialize Meshtastic UART communication
- * ✅ WICHTIG: .begin() wird NICHT hier aufgerufen!
- * Das passiert jetzt in main.cpp setup()
- * Call this in setup() NACH MeshtasticSerial.begin()
+ * Call this in setup() after UART1 initialization
  */
 void initMeshtasticComm();
 
 /**
- * Send beacon data to Meshtastic
- * @param address MAC address of beacon
- * @param device Device info
- * @param lastSeenOverride Override for last seen time
+ * Send payload via Meshtastic
+ * @param payload JSON string to send
  */
-void sendBeaconToMeshtastic(const std::string& address, DeviceInfo& device, float lastSeenOverride);
+void sendPayloadViaMeshtastic(const String& payload);
 
 /**
  * Check for incoming Meshtastic commands
@@ -37,7 +32,7 @@ void checkForMeshtasticCommands();
 
 /**
  * Process complete JSON message from buffer
- * Detects config commands and calls ConfigManager
+ * Detects config commands and calls appropriate manager
  * Called internally by checkForMeshtasticCommands()
  */
 void processReceivedJSON();

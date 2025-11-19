@@ -13,38 +13,47 @@ private:
   U8G2_SH1106_128X64_NONAME_F_SW_I2C* display;
   bool isDisplayActive;
   unsigned long lastUpdateTime;
-  
-  // ✅ NEW: Beacon rotation variables
-  int currentBeaconIndex;
-  unsigned long lastRotationTime;
+  unsigned long lastMeasurementTime;
   
   // Helper methods for drawing
-  void drawHeader();
-  void drawBeaconInfo(const std::string& gatewayId, const std::string& beaconName,
-                      float distance, unsigned long lastSeenMs, bool workerPresent);
-  void drawNoBeacon();
-  void drawWorkerGone();
+  void drawStartupScreen();
+  void drawMainScreen(const std::string& deviceId, 
+                      bool t1Present, int t1Distance,
+                      bool t2Present, int t2Distance,
+                      bool t3Present, int t3Distance,
+                      int closestDistance,
+                      int rangeThresholdCm,
+                      bool filterEnabled);
+  void drawAbsentScreen();
   
-  String formatDistance(float distance);
-  String formatLastSeen(unsigned long lastSeenMs);
+  String formatDistance(int distanceCm);
+  String formatLastSeen(unsigned long lastMeasurementMs);
   
 public:
   DisplayManager(int sdaPin, int sclPin);
   ~DisplayManager();
   
   void init();
-  void updateDisplay(const std::string& gatewayId, const std::string& beaconName,
-                     float distance, unsigned long lastSeenMs, bool workerPresent,
-                     bool workerActive = true);
-  void displayWorkerGone();
+  
+  // Main display update - call this in loop with target data
+  void updateDisplay(const std::string& deviceId,
+                     bool t1Present, int t1Distance,
+                     bool t2Present, int t2Distance,
+                     bool t3Present, int t3Distance,
+                     int closestDistance,
+                     int rangeThresholdCm,
+                     bool filterEnabled);
+  
+  // Update measurement time
+  void updateMeasurementTime();
+  
+  // Turn on/off
   void turnDisplayOff();
   void turnDisplayOn();
-  bool shouldUpdate();
   
-  // ✅ NEW: Beacon rotation methods
-  void updateBeaconRotation(int totalBeacons);
-  int getCurrentBeaconIndex();
-  void resetBeaconIndex();  // ✅ Reset rotation when beacon leaves zone
+  // Status
+  bool shouldUpdate();
+  void displayStartup();
 };
 
 #endif // DISPLAYMANAGER_H
